@@ -8,6 +8,7 @@
 #include "model.h"
 #include "stb_image.h"
 #include "camera.h"
+#include "skybox.h"
 
 // settings
 const int SCR_WIDTH = 1920;
@@ -62,11 +63,59 @@ int main()
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_FRAMEBUFFER_SRGB);
 
+	// With our nice shader class, just give the paths and call use
+	Shader lightShader("shaders/light/vertex.glsl", "shaders/light/fragment.glsl");
+	Shader skyboxShader("shaders/skybox/vertex.glsl", "shaders/skybox/fragment.glsl");
+	Shader lampShader("shaders/lamp/vertex.glsl", "shaders/lamp/fragment.glsl");
+	skyboxShader.use();
+	skyboxShader.setInt("skybox", 0);
+	stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
+
+
+	Skybox skybox;
+	// Set up our skybox
+	vector<std::string> faces
+	{
+		"assets/skybox/right.jpg",
+		"assets/skybox/left.jpg",
+		"assets/skybox/top.jpg",
+		"assets/skybox/bottom.jpg",
+		"assets/skybox/front.jpg",
+		"assets/skybox/back.jpg"
+	};
+	skybox.init(faces);
+
+	camera.Init(glm::vec3(-50.0f, -20.0f, -250.0f),
+		glm::vec3(250.0f, 0.0f, 50.0f),
+		glm::vec3(10.0f, -4.0f, 0.0f));
+
 	while (!glfwWindowShouldClose(window))
 	{
 		processInput(window);
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		// camera/view transformation
+		glm::mat4 view = camera.GetViewMatrix();
+		glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 800.0f);
+
+
+
+		// draw skybox last
+		glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
+		skyboxShader.use();
+		auto skyView = glm::mat4(glm::mat3(camera.GetViewMatrix())); // remove translation from the view matrix
+		skyboxShader.setMat4("projection", projection);
+		skyboxShader.setMat4("view", skyView);
+
+		// skybox cube
+		glBindVertexArray(skybox.VAO);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, skybox.cubemapTexture);
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+		glBindVertexArray(0);
+		glDepthFunc(GL_LESS); // set depth function back to default
+
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
